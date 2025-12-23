@@ -1,0 +1,224 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  COMPTABLE
+  COMMERCIAL
+  CONSULTATION
+}
+
+enum RegimeTVA {
+  ASSUJETTI_CLASSIQUE
+  FRANCHISE_BASE
+  OPTION_TVA
+  ASSOCIATION_NON_LUCRATIVE
+  ASSUJETTI_OUTRE_MER
+}
+
+enum MentionTVALegale {
+  STANDARD
+  TVA_NON_APPLICABLE_293B
+  EXONERATION_262_TER
+  ASSOCIATION
+  CUSTOM
+}
+
+enum PlanAbonnement {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum StatutFacture {
+  BROUILLON
+  VALIDEE
+}
+
+enum TypeFacture {
+  STANDARD
+  AVOIR
+}
+
+// ==================== ENTREPRISE ====================
+model Entreprise {
+  id                      String            @id @default(cuid())
+  nom                     String
+  siren                   String?           @unique
+  adresse                 String?
+  codePostal              String?
+  ville                   String?
+  departement             String?           // Pour adaptation TVA outre-mer
+  tvaIntra                String?           // Numéro TVA intracommunautaire
+  iban                    String?
+  bic                     String?
+  mentionsLegales         String?
+
+  // TVA
+  regimeTVA               RegimeTVA         @default(ASSUJETTI_CLASSIQUE)
+  mentionTVALegale        MentionTVALegale  @default(STANDARD)
+  mentionTVAPersonnalisee String?
+  tauxTVADefaut           Float             @default(20.0)
+
+  // Sécurité admin
+  phraseSecreteHash       String?           // Hash bcrypt de la phrase secrète admin
+
+  // Abonnement
+  plan                    PlanAbonnement    @default(FREE)
+  dateDebutAbo            DateTime?
+  dateFinAbo              DateTime?
+  facturesEmisesCeMois    Int               @default(0)
+  limiteFacturesMensuelles Int              @default(10) // Pour FREE/STARTER
+
+  // Relations
+  utilisateurs            Utilisateur[]
+  clients                 Client[]
+  devis                   Devis[]
+  factures                Facture[]
+
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+}
+
+// ==================== UTILISATEUR ====================
+model Utilisateur {
+  id              String    @id @default(cuid())
+  telephone       String    @unique // Format international sans + (ex: 33612345678)
+  nom             String
+  prenom          String?
+  email           String?   @unique
+  role            Role      @default(CONSULTATION)
+
+  entrepriseId    String
+  entreprise      Entreprise @relation(fields: [entrepriseId], references: [id])
+
+  // Audit factures
+  facturesCreees  Facture[] @relation("FactureCreePar")
+  facturesValidees Facture[] @relation("FactureValideePar")
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ==================== CLIENT ====================
+model Client {
+  id           String @id @default(cuid())
+  nom          String
+  adresse      String?
+  siren        String?
+  tvaIntra     String?
+
+  entrepriseId String
+  entreprise   Entreprise @relation(fields: [entrepriseId], references: [id])
+
+  devis        Devis[]
+  factures     Facture[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ==================== DEVIS ====================
+model Devis {
+  id           String @id @default(cuid())
+  numero       String
+  date         DateTime @default(now())
+  validiteJours Int     @default(30)
+  statut       String  @default("brouillon") // brouillon, envoyé, accepté, refusé
+
+  clientId     String
+  client       Client @relation(fields: [clientId], references: [id])
+
+  entrepriseId String
+  entreprise   Entreprise @relation(fields: [entrepriseId], references: [id])
+
+  lignes       LigneDevis[]
+  facture      Facture? @relation("DevisToFacture")
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([entrepriseId, numero])
+}
+
+// ==================== FACTURE ====================
+model Facture {
+  id                String       @id @default(cuid())
+  numero            String
+  type              TypeFacture  @default(STANDARD)
+  statut            StatutFacture @default(BROUILLON)
+
+  dateCreation      DateTime     @default(now())
+  dateEmission      DateTime?    // Date réelle d'émission (quand validée)
+
+  // Avoir
+  factureOrigineId  String?
+  factureOrigine    Facture?     @relation("AvoirSurFacture", fields: [factureOrigineId], references: [id])
+  avoirs            Facture[]    @relation("AvoirSurFacture")
+
+  // Devis d'origine
+  devisId           String?      @unique
+  devis             Devis?       @relation("DevisToFacture", fields: [devisId], references: [id])
+
+  clientId          String
+  client            Client       @relation(fields: [clientId], references: [id])
+
+  entrepriseId      String
+  entreprise        Entreprise   @relation(fields: [entrepriseId], references: [id])
+
+  lignes            LigneFacture[]
+
+  // Totaux
+  totalHT           Float        @default(0)
+  totalTVA          Float        @default(0)
+  totalTTC          Float        @default(0)
+
+  // Audit
+  creeParId         String
+  creePar           Utilisateur  @relation("FactureCreePar", fields: [creeParId], references: [id])
+  valideeParId      String?
+  valideePar        Utilisateur? @relation("FactureValideePar", fields: [valideeParId], references: [id])
+  valideeLe         DateTime?
+
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([entrepriseId, numero])
+}
+
+// ==================== LIGNES ====================
+model LigneDevis {
+  id             String  @id @default(cuid())
+  description    String
+  quantite       Float
+  prixUnitaireHT Float
+  tauxTVA        Float   @default(20.0)
+
+  devisId        String
+  devis          Devis   @relation(fields: [devisId], references: [id])
+}
+
+model LigneFacture {
+  id             String  @id @default(cuid())
+  description    String
+  quantite       Float
+  prixUnitaireHT Float
+  tauxTVA        Float   @default(20.0)
+
+  factureId      String
+  facture        Facture @relation(fields: [factureId], references: [id])
+}
