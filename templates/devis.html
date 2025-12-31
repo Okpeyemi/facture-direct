@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Devis {{devis.numero}}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11pt; margin: 0; padding: 0; color: #333; }
+    .container { width: 100%; max-width: 800px; margin: 0 auto; padding: 40px; }
+    .header { display: flex; justify-content: space-between; margin-bottom: 40px; }
+    .info { line-height: 1.6; }
+    .bold { font-weight: bold; font-size: 12pt; }
+    table { width: 100%; border-collapse: collapse; margin: 30px 0; }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+    th { background-color: #f8f8f8; }
+    .right { text-align: right; }
+    .total { font-size: 13pt; margin-top: 30px; }
+    .footer { margin-top: 60px; font-size: 9pt; color: #666; line-height: 1.5; }
+    .validity { font-style: italic; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="info">
+        <div class="bold">{{entreprise.nom}}</div>
+        <div>{{entreprise.adresse}}</div>
+        <div>SIREN : {{entreprise.siren}}</div>
+        {{#if entreprise.tvaIntra}}<div>TVA : {{entreprise.tvaIntra}}</div>{{/if}}
+      </div>
+      <div class="info">
+        <div class="bold">DEVIS N° {{devis.numero}}</div>
+        <div>Date : {{formatDate devis.date}}</div>
+        <div class="validity">Valable jusqu'au {{formatDate devis.dateValidite}}</div>
+      </div>
+    </div>
+
+    <div class="info" style="margin-bottom: 30px;">
+      <strong>Client :</strong><br>
+      <div class="bold">{{client.nom}}</div>
+      <div>{{client.adresse}}</div>
+      {{#if client.siren}}<div>SIREN : {{client.siren}}</div>{{/if}}
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th class="right">Qté</th>
+          <th class="right">PU HT</th>
+          <th class="right">Total HT</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each devis.lignes}}
+        <tr>
+          <td>{{this.description}}</td>
+          <td class="right">{{this.quantite}}</td>
+          <td class="right">{{formatMoney this.prixUnitaireHT}} €</td>
+          <td class="right">{{formatMoney (multiply this.quantite this.prixUnitaireHT)}} €</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+
+    <div class="total right">
+      <div>Total HT : {{formatMoney devis.totalHT}} €</div>
+      {{#if devis.totalTVA}}
+      <div>Dont TVA ({{devis.tauxTVA}}%) : {{formatMoney devis.totalTVA}} €</div>
+      {{/if}}
+      <div class="bold" style="font-size: 15pt; margin-top: 10px;">
+        Total TTC : {{formatMoney devis.totalTTC}} €
+      </div>
+    </div>
+
+    <div class="footer">
+      Conditions de paiement : {{devis.conditionsPaiement}}<br>
+      {{#if entreprise.mentionTVALegale}}
+        {{entreprise.mentionTVALegale}}
+      {{else}}
+        TVA non applicable, art. 293 B du CGI
+      {{/if}}
+      <br><br>
+      FactureDirect – Vos devis et factures en 30 secondes sur WhatsApp
+    </div>
+  </div>
+</body>
+</html>

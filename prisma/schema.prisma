@@ -112,6 +112,8 @@ model Utilisateur {
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  devisDrafts DevisDraft[]
 }
 
 // ==================== CLIENT ====================
@@ -221,4 +223,29 @@ model LigneFacture {
 
   factureId      String
   facture        Facture @relation(fields: [factureId], references: [id])
+}
+
+model ConversationState {
+  id         String   @id @default(cuid())
+  telephone  String   @unique
+  step       String   // ex: "onboarding_nom_entreprise"
+  data       Json?    // { nomEntreprise: "Dupont SARL", adresse: "...", etc. }
+  expiresAt  DateTime? // Optionnel : nettoyage auto après 7 jours d’inactivité
+  updatedAt  DateTime @updatedAt
+}
+
+// Remplace l'ancienne table DevisDraft par celle-ci
+model DevisDraft {
+  id             String   @id @default(cuid())
+  utilisateurId  String
+  utilisateur    Utilisateur @relation(fields: [utilisateurId], references: [id])
+
+  titre          String?  // Ex: "Devis Martin SARL" – pour identification facile
+  step           String   // Étape actuelle
+  data           Json?    // Données temporaires (clientId, lignes, etc.)
+  status         String   @default("active") // active, paused, cancelled
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([utilisateurId, status])
 }
