@@ -15,6 +15,8 @@ export async function POST(req: NextRequest) {
     const numMedia = parseInt(params.get('NumMedia') as string || '0');
     const mediaUrl = params.get('MediaUrl0') as string;
 
+    console.log(`[Webhook] Reçu de ${from}: "${body}" (Media: ${numMedia})`);
+
     // IMPORTANT : On lance le traitement en arrière-plan pour répondre à Twilio immédiatement
     // Cela évite l'erreur de timeout (5 secondes max)
     processWorkflow(from, body, numMedia, mediaUrl).catch(err => {
@@ -30,6 +32,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function processWorkflow(from: string, body: string, numMedia: number, mediaUrl: string | null) {
+  console.log(`[Workflow] Début traitement pour ${from}`);
   let text = body;
   let isVoice = false;
 
@@ -41,7 +44,7 @@ async function processWorkflow(from: string, body: string, numMedia: number, med
 
       // Authentification pour télécharger le média Twilio
       const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
-      
+
       const audioRes = await fetch(mediaUrl, {
         headers: { 'Authorization': `Basic ${auth}` }
       });
@@ -73,7 +76,7 @@ async function processWorkflow(from: string, body: string, numMedia: number, med
       text = (await transcriptionRes.text()).trim();
       console.log('Transcription Groq:', text);
       await sendWhatsAppText(from, `✅ Transcrit : "${text}"`);
-      
+
     } catch (error) {
       console.error('Erreur transcription détaillée:', error);
       await sendWhatsAppText(from, '❌ Désolé, je n\'ai pas pu transcrire votre message vocal.');
@@ -83,6 +86,9 @@ async function processWorkflow(from: string, body: string, numMedia: number, med
 
   // 3. Traitement final (IA / Logique métier)
   if (text) {
+    console.log(`[Workflow] Envoi à handleIncomingMessage: "${text}"`);
     await handleIncomingMessage({ from, text, isVoice });
+  } else {
+    console.warn(`[Workflow] Aucun texte à traiter pour ${from}`);
   }
 }

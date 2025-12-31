@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { sendWhatsAppText } from '@/lib/whatsapp-utils';
 import { handleOnboarding } from './onboarding';
 import { handleDevisCreation } from './devis/index';
+import { handleChat } from './chat';
 import { normalizePhone } from './utils/phone';
 import { detectIntent } from './utils/intent';
 
@@ -18,6 +19,8 @@ export async function handleIncomingMessage(ctx: MessageContext) {
   const phone = normalizePhone(from);
   const lowerText = text.toLowerCase().trim();
 
+  console.log(`[Bot] Traitement message pour ${phone} (Original: ${from})`);
+
   try {
     const user = await prisma.utilisateur.findUnique({
       where: { telephone: phone },
@@ -26,6 +29,7 @@ export async function handleIncomingMessage(ctx: MessageContext) {
 
     // Utilisateur inscrit et entreprise valide
     if (user && user.entreprise.nom !== 'En cours de création') {
+      console.log(`[Bot] Utilisateur existant trouvé: ${user.id} (${user.role})`);
       // Détection d'intention avec Groq (robuste et naturel)
       const intent = await detectIntent(text);
 
@@ -61,20 +65,17 @@ export async function handleIncomingMessage(ctx: MessageContext) {
           );
           return;
 
+        case 'chat':
+          return await handleChat(from, user, text);
+
         default:
-          // Intention inconnue → accueil standard
-          const prenom = user.prenom || user.nom.split(' ')[0];
-          await sendWhatsAppText(
-            from,
-            `Bonjour ${prenom} ! 👋\nVous êtes **${user.role}** chez **${user.entreprise.nom}**.\n\n` +
-            `Que puis-je faire pour vous aujourd’hui ?\n\n` +
-            `Tapez /menu pour voir les options disponibles.`
-          );
-          return;
+          // Intention inconnue → on discute aussi (fallback plus naturel)
+          return await handleChat(from, user, text);
       }
     }
 
     // Onboarding pour les nouveaux utilisateurs
+    console.log(`[Bot] Utilisateur non trouvé ou incomplet, passage au onboarding`);
     await handleOnboarding(from, phone, text);
 
   } catch (error) {

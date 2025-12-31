@@ -14,4 +14,5 @@ export type ExtractedData = {
   adresse?: string | null;
   siren?: string | null;
   regimeTVA?: RegimeTVA | null;
+  reply?: string; // Réponse générée par l'IA pour l'utilisateur
 };
