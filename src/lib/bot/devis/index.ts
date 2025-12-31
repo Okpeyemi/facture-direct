@@ -1,6 +1,14 @@
 // src/lib/bot/devis/index.ts
 
 import { prisma } from '@/lib/prisma';
+type DevisDraft = {
+  id: string;
+  status: string;
+  titre: string | null;
+  step: string | null;
+  data: unknown;
+  utilisateurId: string;
+};
 import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsapp-utils';
 import { genererDevisPDF } from '@/lib/pdf-generator';
 import { parseLignesSimple } from './parser';
@@ -57,8 +65,8 @@ export async function handleDevisCreation(
 
   // Si un draft est spécifié (reprise), on le prend
   let currentDraft = activeDraftId
-    ? drafts.find(d => d.id === activeDraftId)
-    : drafts.find(d => d.status === 'active') || drafts[0];
+    ? drafts.find((d: DevisDraft) => d.id === activeDraftId)
+    : drafts.find((d: DevisDraft) => d.status === 'active') || drafts[0];
 
   // Gestion avec parsed si disponible
   if (parsedIntent && parsedIntent.clientName) {
@@ -84,7 +92,7 @@ export async function handleDevisCreation(
     }
 
     // Client existe : vérifier devis en cours
-    const existingDraft = drafts.find(d => d.data && typeof d.data === 'object' && 'clientId' in d.data && d.data.clientId === client.id && d.status === 'active');
+    const existingDraft = drafts.find((d: DevisDraft) => d.data && typeof d.data === 'object' && 'clientId' in d.data && (d.data as Record<string, unknown>).clientId === client.id && d.status === 'active');
     if (existingDraft) {
       await sendWhatsAppText(from, `Il y a déjà un devis en cours pour ${client.nom}. Voulez-vous le reprendre (R) ou en créer un nouveau (N) ?`);
       await prisma.devisDraft.update({
@@ -151,7 +159,7 @@ export async function handleDevisCreation(
   // Si pas de draft actif et pas de texte (premier appel), on propose le choix
   if (!currentDraft && drafts.length > 0 && !text) {
     let message = `Vous avez ${drafts.length} devis en cours :\n\n`;
-    drafts.forEach((d, i) => {
+    drafts.forEach((d: DevisDraft, i: number) => {
       const titre = d.titre || `Devis ${i + 1}`;
       const statut = d.status === 'paused' ? ' (en pause)' : '';
       message += `${i + 1}. ${titre}${statut}\n`;
