@@ -1,4 +1,10 @@
-import { RegimeTVA } from '@prisma/client';
+// Enum défini localement pour éviter les problèmes de génération Prisma
+type RegimeTVA = 
+  | 'ASSUJETTI_CLASSIQUE'
+  | 'FRANCHISE_BASE'
+  | 'OPTION_TVA'
+  | 'ASSOCIATION_NON_LUCRATIVE'
+  | 'ASSUJETTI_OUTRE_MER';
 
 export const STEPS = {
   WAITING_YES: 'waiting_yes',
