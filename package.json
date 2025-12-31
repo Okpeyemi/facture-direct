@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "reset-db": "prisma migrate reset --force"
+    "reset-db": "prisma migrate reset --force",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.2.0",
