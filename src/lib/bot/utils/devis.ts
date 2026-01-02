@@ -1,7 +1,7 @@
 // src/lib/bot/utils/devis.ts
 
 import { prisma } from '@/lib/prisma';
-import { put, del } from '@vercel/blob';
+import { put, del, list } from '@vercel/blob';
 
 export async function genererNumeroDevis(entrepriseId: string): Promise<string> {
   const annee = new Date().getFullYear();
@@ -38,14 +38,24 @@ export async function uploadPDFTemporary(buffer: Buffer, filename: string): Prom
 }
 
 /**
- * Supprime un PDF de Vercel Blob par son URL.
+ * Supprime un PDF de Vercel Blob par son nom de fichier (pathname).
+ * Utilise list() pour trouver le blob, puis del() avec l'URL complète.
  */
-export async function deletePDF(url: string): Promise<void> {
+export async function deletePDF(filename: string): Promise<void> {
   try {
-    await del(url);
-    console.log(`[Upload] PDF supprimé: ${url}`);
+    // Rechercher le blob par son pathname (prefix)
+    const { blobs } = await list({ prefix: filename, limit: 1 });
+    
+    if (blobs.length === 0) {
+      console.log(`[Upload] PDF non trouvé, rien à supprimer: ${filename}`);
+      return;
+    }
+
+    // Supprimer le blob trouvé avec son URL complète
+    await del(blobs[0].url);
+    console.log(`[Upload] PDF supprimé: ${blobs[0].url}`);
   } catch (error) {
-    console.warn(`[Upload] Impossible de supprimer le PDF: ${url}`, error);
+    console.warn(`[Upload] Impossible de supprimer le PDF: ${filename}`, error);
   }
 }
 

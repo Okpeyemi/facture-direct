@@ -182,7 +182,7 @@ export async function handleValidateFacture(from: string, user: any) {
 
     // Supprimer l'ancien brouillon PDF s'il existe
     const nomBrouillon = genererNomFichierFacture(factureValidee.numero, factureValidee.client.nom, true);
-    await deletePDF(`https://*.blob.vercel-storage.com/${nomBrouillon}`).catch(() => {});
+    await deletePDF(nomBrouillon);
 
     // Upload la version définitive
     const nomDefinitif = genererNomFichierFacture(factureValidee.numero, factureValidee.client.nom, false);
