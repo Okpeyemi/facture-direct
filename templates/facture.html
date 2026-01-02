@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Facture {{facture.numero}}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11pt; margin: 0; padding: 0; color: #333; }
+    .container { width: 100%; max-width: 800px; margin: 0 auto; padding: 40px; }
+    .header { display: flex; justify-content: space-between; margin-bottom: 40px; }
+    .info { line-height: 1.6; }
+    .bold { font-weight: bold; font-size: 12pt; }
+    .title { font-size: 18pt; font-weight: bold; color: #2c3e50; margin-bottom: 10px; }
+    .statut { 
+      display: inline-block; 
+      padding: 5px 15px; 
+      border-radius: 5px; 
+      font-size: 10pt; 
+      font-weight: bold;
+    }
+    .statut-brouillon { background: #f39c12; color: white; }
+    .statut-validee { background: #27ae60; color: white; }
+    table { width: 100%; border-collapse: collapse; margin: 30px 0; }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+    th { background-color: #2c3e50; color: white; }
+    .right { text-align: right; }
+    .total-section { margin-top: 30px; }
+    .total-row { display: flex; justify-content: flex-end; margin: 5px 0; }
+    .total-label { width: 200px; text-align: right; padding-right: 20px; }
+    .total-value { width: 120px; text-align: right; font-weight: bold; }
+    .grand-total { font-size: 14pt; background: #ecf0f1; padding: 10px; margin-top: 10px; }
+    .footer { margin-top: 60px; font-size: 9pt; color: #666; line-height: 1.5; }
+    .mentions { margin-top: 40px; padding: 20px; background: #f9f9f9; border-left: 4px solid #2c3e50; }
+    .iban { margin-top: 20px; font-size: 10pt; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="info">
+        <div class="bold">{{entreprise.nom}}</div>
+        <div>{{entreprise.adresse}}</div>
+        {{#if entreprise.codePostal}}<div>{{entreprise.codePostal}} {{entreprise.ville}}</div>{{/if}}
+        <div>SIREN : {{entreprise.siren}}</div>
+        {{#if entreprise.tvaIntra}}<div>TVA Intra : {{entreprise.tvaIntra}}</div>{{/if}}
+      </div>
+      <div class="info" style="text-align: right;">
+        <div class="title">FACTURE</div>
+        <div class="bold">N° {{facture.numero}}</div>
+        <div>Date : {{formatDate facture.dateEmission}}</div>
+        <div style="margin-top: 10px;">
+          <span class="statut {{#if facture.estValidee}}statut-validee{{else}}statut-brouillon{{/if}}">
+            {{#if facture.estValidee}}VALIDÉE{{else}}BROUILLON{{/if}}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="info" style="margin-bottom: 30px; padding: 15px; background: #f5f5f5;">
+      <strong>Facturé à :</strong><br>
+      <div class="bold">{{client.nom}}</div>
+      {{#if client.adresse}}<div>{{client.adresse}}</div>{{/if}}
+      {{#if client.siren}}<div>SIREN : {{client.siren}}</div>{{/if}}
+      {{#if client.tvaIntra}}<div>TVA Intra : {{client.tvaIntra}}</div>{{/if}}
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th class="right">Qté</th>
+          <th class="right">PU HT</th>
+          <th class="right">TVA</th>
+          <th class="right">Total HT</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each facture.lignes}}
+        <tr>
+          <td>{{this.description}}</td>
+          <td class="right">{{this.quantite}}</td>
+          <td class="right">{{formatMoney this.prixUnitaireHT}} €</td>
+          <td class="right">{{this.tauxTVA}}%</td>
+          <td class="right">{{formatMoney (multiply this.quantite this.prixUnitaireHT)}} €</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+
+    <div class="total-section">
+      <div class="total-row">
+        <div class="total-label">Total HT :</div>
+        <div class="total-value">{{formatMoney facture.totalHT}} €</div>
+      </div>
+      <div class="total-row">
+        <div class="total-label">TVA ({{facture.tauxTVA}}%) :</div>
+        <div class="total-value">{{formatMoney facture.totalTVA}} €</div>
+      </div>
+      <div class="total-row grand-total">
+        <div class="total-label">Total TTC :</div>
+        <div class="total-value" style="font-size: 16pt;">{{formatMoney facture.totalTTC}} €</div>
+      </div>
+    </div>
+
+    <div class="mentions">
+      <strong>Conditions de paiement :</strong> {{facture.conditionsPaiement}}<br><br>
+      {{#if entreprise.iban}}
+      <div class="iban">
+        <strong>Coordonnées bancaires :</strong><br>
+        IBAN : {{entreprise.iban}}<br>
+        {{#if entreprise.bic}}BIC : {{entreprise.bic}}{{/if}}
+      </div>
+      {{/if}}
+    </div>
+
+    <div class="footer">
+      {{#if entreprise.mentionTVALegale}}
+        {{entreprise.mentionTVALegale}}
+      {{else}}
+        {{#if (eq entreprise.regimeTVA "FRANCHISE_BASE")}}
+          TVA non applicable, art. 293 B du CGI
+        {{/if}}
+      {{/if}}
+      <br><br>
+      {{#if entreprise.mentionsLegales}}
+        {{entreprise.mentionsLegales}}
+      {{/if}}
+      <br><br>
+      <em>Document généré par FactureDirect</em>
+    </div>
+  </div>
+</body>
+</html>
