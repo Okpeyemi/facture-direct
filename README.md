@@ -8,23 +8,40 @@ Idéal pour les freelances, auto-entrepreneurs, artisans et TPE qui veulent fact
 ## Fonctionnalités
 
 ### Implémentées
-- **Onboarding automatique** : Configuration de l'entreprise (nom, adresse, régime TVA, etc.) via conversation à la première utilisation.
-- **Création de devis** : Conversation naturelle pour créer des devis, avec gestion des clients, lignes de devis, validité, et génération de PDF envoyé directement sur WhatsApp.
-- **Gestion des clients** : Création et mise à jour des clients via conversation.
-- **Génération PDF professionnelle** : PDFs de devis générés avec Handlebars et Puppeteer, envoyés sur WhatsApp.
+- **Onboarding automatique** : Configuration de l'entreprise (nom, adresse, régime TVA, IBAN, etc.) via conversation à la première utilisation.
+- **Création de devis** : Conversation naturelle pour créer des devis, avec gestion des clients, lignes, validité, et génération de PDF.
+- **Création de factures** : Transformation de devis en factures avec workflow conversationnel.
+- **Gestion des statuts** : Devis (brouillon → accepté/refusé), Factures (brouillon → validée → payée).
+- **Validation de factures** : Une fois validée, la facture est définitive et le PDF définitif est généré.
+- **Gestion des clients** : Création et sélection des clients via conversation.
+- **Génération PDF professionnelle** : PDFs A4 générés avec Handlebars et Puppeteer, envoyés directement sur WhatsApp.
+- **Nomenclature PDF** :
+  - Devis : `devis-DEV-xxxx-NomClient-annee.pdf`
+  - Facture brouillon : `facture-FACT-xxxx-NomClient-brouillon-annee.pdf`
+  - Facture validée : `facture-FACT-xxxx-NomClient-annee.pdf`
 - **Transcription vocale** : Support des messages vocaux via OpenAI Whisper.
-- **États de conversation** : Gestion des états de conversation et brouillons multi-utilisateurs avec DevisDraft.
-- **Numérotation automatique** : Numéros de devis générés automatiquement.
+- **Commandes conversationnelles** :
+  - `menu` : Affiche le menu principal
+  - `mes devis` / `mes factures` : Liste les documents
+  - `1`, `2`, `3`... : Sélectionne un devis pour voir ses détails
+  - `facturer` : Crée une facture depuis un devis
+  - `valider` : Valide une facture brouillon
+  - `imprimer` / `imprimer devis` : Génère le PDF
+  - `statut` : Affiche l'état de l'opération en cours
+  - `annuler` : Annule l'opération en cours
+- **États de conversation** : Gestion des brouillons multi-utilisateurs (DevisDraft, FactureDraft).
+- **Numérotation automatique** : DEV-AAAA-XXX pour devis, FACT-AAAA-XXX pour factures.
+- **Paramètres entreprise** : Consultation des informations de l'entreprise.
 
 ### En développement
-- Création de factures par conversation naturelle (texte ou message vocal).
-- États facture : brouillon → validée (immuable une fois validée).
+- Modification de devis existants.
 - Création d'avoirs pour corriger ou annuler une facture validée.
 - Numérotation séquentielle stricte et inaltérabilité (conforme loi anti-fraude TVA).
-- Gestion intelligente de la TVA selon régime (franchise en base, assujetti classique, association, outre-mer, etc.).
+- Gestion intelligente de la TVA selon régime (franchise en base, assujetti classique, etc.).
 - Multi-utilisateurs avec rôles (Admin, Comptable, Commercial, Consultation).
 - Abonnements SaaS (Free, Starter, Pro, Enterprise) avec limites personnalisées.
 - Recherche intelligente de factures/devis (par client, date, montant).
+- Notifications d'erreurs par email au support.
 
 ## Stack technique
 
@@ -64,10 +81,13 @@ Idéal pour les freelances, auto-entrepreneurs, artisans et TPE qui veulent fact
    - Copiez `.env.example` vers `.env.local` et remplissez les variables :
      ```
      DATABASE_URL="postgresql://user:password@localhost:5432/facture_direct"
-     TWILIO_ACCOUNT_SID="your_twilio_sid"
-     TWILIO_AUTH_TOKEN="your_twilio_token"
-     TWILIO_WHATSAPP_NUMBER="whatsapp:+1234567890"
-     OPENAI_API_KEY="your_openai_key"
+     BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxxxx
+     TWILIO_ACCOUNT_SID=your_account_id
+     TWILIO_AUTH_TOKEN=your_permanent_token
+     TWILIO_WHATSAPP_NUMBER=whatsapp:+1234567890
+     GROQ_API_KEY=your_groq_api_key
+     GROQ_MODEL_VALIDATION=llama3-8b-8192
+     GROQ_MODEL_MAIN=llama3-8b-8192
      ```
 
 4. **Exécutez les migrations Prisma** :
@@ -90,9 +110,13 @@ Idéal pour les freelances, auto-entrepreneurs, artisans et TPE qui veulent fact
 
 ## Utilisation
 
-- Envoyez un message sur WhatsApp au numéro configuré.
-- Suivez les instructions conversationnelles pour l'onboarding et la création de devis.
-- Les PDFs sont automatiquement générés et envoyés.
+1. Envoyez un message sur WhatsApp au numéro configuré.
+2. Suivez les instructions conversationnelles pour l'onboarding (première utilisation).
+3. Tapez `menu` pour voir les options disponibles.
+4. Créez un devis en tapant "Créer un devis".
+5. Transformez un devis en facture en tapant "Créer une facture" puis sélectionnez le devis.
+6. Validez une facture brouillon en tapant `valider`.
+7. Les PDFs sont automatiquement générés et envoyés sur WhatsApp.
 
 ## Scripts npm
 
@@ -104,7 +128,15 @@ Idéal pour les freelances, auto-entrepreneurs, artisans et TPE qui veulent fact
 
 ## État du projet
 
-Le projet est en développement actif. La création de devis est entièrement fonctionnelle. La création de factures et les fonctionnalités avancées (abonnements, multi-utilisateurs) sont en cours d'implémentation.
+Le projet est en développement actif. Les fonctionnalités principales sont opérationnelles :
+- ✅ Onboarding complet
+- ✅ Création et gestion de devis
+- ✅ Création de factures depuis devis
+- ✅ Validation de factures avec génération PDF définitif
+- ✅ Consultation des listes (devis, factures)
+- ✅ Génération PDF A4 professionnels
+- 🚧 Modification de devis
+- 🚧 Avoirs et conformité anti-fraude TVA
 
 ## Contribution
 
