@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Réponse immédiate à Twilio
-    return new Response('OK', { status: 200 });
+    return new Response('Demande en cours de traitement...', { status: 200 });
   } catch (error) {
     console.error('Erreur réception Webhook:', error);
     return new Response('Error', { status: 500 });
