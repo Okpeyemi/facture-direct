@@ -14,75 +14,8 @@ export async function handleFactureStep(from: string, draft: any, user: any, tex
   const data = (draft.data || {}) as FactureDraftData;
 
   switch (draft.step) {
-    case FACTURE_STEPS.CHOOSING_SOURCE: {
-      if (lowerText === '1' && data.devisList && data.devisList.length > 0) {
-        // À partir d'un devis
-        let message = '📋 *ÉTAPE 1/3 : Sélection du devis*\n\n';
-        message += '*Devis disponibles :*\n';
-        
-        data.devisList.forEach((d, i) => {
-          message += `${i + 1}. ${d.numero} - ${d.clientNom}\n`;
-        });
-        
-        message += '\n*Tapez le numéro du devis à transformer en facture*\n\n';
-        message += '---\n';
-        message += '💡 _Tapez *annuler* pour quitter, *menu* pour le menu, ou *statut* pour voir où vous en êtes._';
-
-        await prisma.factureDraft.update({
-          where: { id: draft.id },
-          data: { step: FACTURE_STEPS.SELECTING_DEVIS },
-        });
-
-        await sendWhatsAppText(from, message);
-        return;
-      }
-
-      if (lowerText === '2' || (lowerText === '1' && (!data.devisList || data.devisList.length === 0))) {
-        // Nouvelle facture - récupérer les clients
-        const clients = await prisma.client.findMany({
-          where: { entrepriseId: entreprise.id },
-          orderBy: { nom: 'asc' },
-          take: 10,
-        });
-
-        let message = '📋 *ÉTAPE 1/3 : Sélection du client*\n\n';
-        
-        if (clients.length > 0) {
-          message += '*Vos clients existants :*\n';
-          clients.forEach((c, i) => {
-            message += `${i + 1}. ${c.nom}\n`;
-          });
-          message += '\n';
-        }
-        
-        message += '*Options :*\n';
-        if (clients.length > 0) {
-          message += '• Tapez le *numéro* pour sélectionner un client\n';
-        }
-        message += '• Tapez *0* pour créer un nouveau client\n\n';
-        message += '---\n';
-        message += '💡 _Tapez *annuler* pour quitter, *menu* pour le menu, ou *statut* pour voir où vous en êtes._';
-
-        await prisma.factureDraft.update({
-          where: { id: draft.id },
-          data: {
-            step: FACTURE_STEPS.ASKING_CLIENT,
-            data: {
-              ...data,
-              source: 'nouvelle',
-              clientsList: clients.map(c => ({ id: c.id, nom: c.nom })),
-            } as any,
-          },
-        });
-
-        await sendWhatsAppText(from, message);
-        return;
-      }
-
-      await sendWhatsAppText(from, '⚠️ Veuillez taper *1* ou *2* pour choisir.');
-      break;
-    }
-
+    // La sélection du devis se fait directement à l'étape CHOOSING_SOURCE
+    case FACTURE_STEPS.CHOOSING_SOURCE:
     case FACTURE_STEPS.SELECTING_DEVIS: {
       const num = parseInt(lowerText);
       const devisList = data.devisList || [];
@@ -405,7 +338,9 @@ export async function handleFactureStep(from: string, draft: any, user: any, tex
         `• Conditions : ${conditions}\n\n` +
         `⚠️ *La facture est en BROUILLON*\n\n` +
         `Que souhaitez-vous faire ?\n` +
-        `• Tapez *valider* pour valider et envoyer le PDF\n` +
+        `• Tapez *valider* pour valider définitivement\n` +
+        `• Tapez *modifier* pour modifier les lignes\n` +
+        `• Tapez *imprimer* pour générer le PDF\n` +
         `• Tapez *menu* pour revenir au menu\n\n` +
         `_Une facture validée est définitive et ne peut plus être modifiée._`
       );

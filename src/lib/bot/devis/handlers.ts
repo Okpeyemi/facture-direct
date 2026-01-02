@@ -6,7 +6,7 @@ import { sendWhatsAppText } from '@/lib/whatsapp-utils';
 import { sendWhatsAppDocument } from '@/lib/whatsapp-utils';
 import { genererDevisPDF } from '@/lib/pdf-generator';
 import { parseLignesSimple } from './parser';
-import { genererNumeroDevis, uploadPDFTemporary } from '@/lib/bot/utils/devis';
+import { genererNumeroDevis, uploadPDFTemporary, genererNomFichierDevis } from '@/lib/bot/utils/devis';
 import { normalizePhone } from '../utils/phone';
 import { STEPS } from './constants';
 import { DevisDraft } from './types';
@@ -378,9 +378,11 @@ export async function handleDevisStep(from: string, draft: DevisDraft, user: any
         client,
       });
 
-      const pdfUrl = await uploadPDFTemporary(pdfBuffer, `devis-${numero}.pdf`);
+      // Utiliser la nomenclature correcte pour le fichier
+      const nomFichier = genererNomFichierDevis(numero, client.nom);
+      const pdfUrl = await uploadPDFTemporary(pdfBuffer, nomFichier);
 
-      await sendWhatsAppDocument(from, pdfUrl, `Devis_${numero}.pdf`, `📄 Voici votre devis ${numero}`);
+      await sendWhatsAppDocument(from, pdfUrl, nomFichier, `📄 Voici votre devis ${numero}`);
 
       await sendWhatsAppText(
         from, 

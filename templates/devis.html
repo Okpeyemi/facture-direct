@@ -4,56 +4,118 @@
   <meta charset="utf-8">
   <title>Devis {{devis.numero}}</title>
   <style>
-    body { font-family: Arial, sans-serif; font-size: 11pt; margin: 0; padding: 0; color: #333; }
-    .container { width: 100%; max-width: 800px; margin: 0 auto; padding: 40px; }
-    .header { display: flex; justify-content: space-between; margin-bottom: 40px; }
-    .info { line-height: 1.6; }
-    .bold { font-weight: bold; font-size: 12pt; }
-    table { width: 100%; border-collapse: collapse; margin: 30px 0; }
-    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-    th { background-color: #f8f8f8; }
-    .right { text-align: right; }
-    .total { font-size: 13pt; margin-top: 30px; }
-    .footer { margin-top: 60px; font-size: 9pt; color: #666; line-height: 1.5; }
-    .validity { font-style: italic; margin-top: 20px; }
+    * { box-sizing: border-box; }
+    @page { size: A4; margin: 0; }
+    body { 
+      font-family: 'Helvetica Neue', Arial, sans-serif; 
+      font-size: 10pt; 
+      margin: 0; 
+      padding: 0; 
+      color: #333;
+      width: 210mm;
+      min-height: 297mm;
+    }
+    .container { 
+      width: 100%; 
+      padding: 15mm 15mm 20mm 15mm;
+    }
+    .header { 
+      display: table;
+      width: 100%;
+      margin-bottom: 25px; 
+    }
+    .header-left, .header-right {
+      display: table-cell;
+      vertical-align: top;
+    }
+    .header-left { width: 50%; }
+    .header-right { width: 50%; text-align: right; }
+    .info { line-height: 1.5; font-size: 9pt; }
+    .bold { font-weight: bold; font-size: 11pt; }
+    .title { font-size: 20pt; font-weight: bold; color: #3498db; margin-bottom: 8px; }
+    .statut { 
+      display: inline-block; 
+      padding: 4px 12px; 
+      border-radius: 4px; 
+      font-size: 9pt; 
+      font-weight: bold;
+      background: #3498db;
+      color: white;
+    }
+    .validity { font-style: italic; font-size: 9pt; color: #666; margin-top: 5px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 9pt; }
+    th { background-color: #3498db; color: white; font-size: 9pt; }
+    td.description { max-width: 200px; word-wrap: break-word; }
+    .right { text-align: right; white-space: nowrap; }
+    .total-section { margin-top: 20px; width: 100%; }
+    .total-table { width: 250px; margin-left: auto; border-collapse: collapse; }
+    .total-table td { border: none; padding: 5px 10px; font-size: 10pt; }
+    .total-table .label { text-align: right; }
+    .total-table .value { text-align: right; font-weight: bold; white-space: nowrap; }
+    .total-table .grand-total td { 
+      font-size: 12pt; 
+      background: #ecf0f1; 
+      padding: 10px;
+    }
+    .footer { margin-top: 40px; font-size: 8pt; color: #666; line-height: 1.4; }
+    .mentions { 
+      margin-top: 25px; 
+      padding: 12px; 
+      background: #f9f9f9; 
+      border-left: 3px solid #3498db;
+      font-size: 9pt;
+    }
+    .client-box {
+      margin-bottom: 20px; 
+      padding: 12px; 
+      background: #f5f5f5;
+      font-size: 9pt;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <div class="info">
+      <div class="header-left info">
         <div class="bold">{{entreprise.nom}}</div>
-        <div>{{entreprise.adresse}}</div>
-        <div>SIREN : {{entreprise.siren}}</div>
-        {{#if entreprise.tvaIntra}}<div>TVA : {{entreprise.tvaIntra}}</div>{{/if}}
+        {{#if entreprise.adresse}}<div>{{entreprise.adresse}}</div>{{/if}}
+        {{#if entreprise.codePostal}}<div>{{entreprise.codePostal}} {{entreprise.ville}}</div>{{/if}}
+        {{#if entreprise.siren}}<div>SIREN : {{entreprise.siren}}</div>{{/if}}
+        {{#if entreprise.tvaIntra}}<div>TVA Intra : {{entreprise.tvaIntra}}</div>{{/if}}
       </div>
-      <div class="info">
-        <div class="bold">DEVIS N° {{devis.numero}}</div>
+      <div class="header-right info">
+        <div class="title">DEVIS</div>
+        <div class="bold">N° {{devis.numero}}</div>
         <div>Date : {{formatDate devis.date}}</div>
         <div class="validity">Valable jusqu'au {{formatDate devis.dateValidite}}</div>
+        <div style="margin-top: 8px;">
+          <span class="statut">EN ATTENTE</span>
+        </div>
       </div>
     </div>
 
-    <div class="info" style="margin-bottom: 30px;">
+    <div class="client-box">
       <strong>Client :</strong><br>
       <div class="bold">{{client.nom}}</div>
-      <div>{{client.adresse}}</div>
+      {{#if client.adresse}}<div>{{client.adresse}}</div>{{/if}}
       {{#if client.siren}}<div>SIREN : {{client.siren}}</div>{{/if}}
+      {{#if client.tvaIntra}}<div>TVA Intra : {{client.tvaIntra}}</div>{{/if}}
     </div>
 
     <table>
       <thead>
         <tr>
-          <th>Description</th>
-          <th class="right">Qté</th>
-          <th class="right">PU HT</th>
-          <th class="right">Total HT</th>
+          <th style="width: 50%;">Description</th>
+          <th class="right" style="width: 12%;">Qté</th>
+          <th class="right" style="width: 18%;">PU HT</th>
+          <th class="right" style="width: 20%;">Total HT</th>
         </tr>
       </thead>
       <tbody>
         {{#each devis.lignes}}
         <tr>
-          <td>{{this.description}}</td>
+          <td class="description">{{this.description}}</td>
           <td class="right">{{this.quantite}}</td>
           <td class="right">{{formatMoney this.prixUnitaireHT}} €</td>
           <td class="right">{{formatMoney (multiply this.quantite this.prixUnitaireHT)}} €</td>
@@ -62,25 +124,43 @@
       </tbody>
     </table>
 
-    <div class="total right">
-      <div>Total HT : {{formatMoney devis.totalHT}} €</div>
-      {{#if devis.totalTVA}}
-      <div>Dont TVA ({{devis.tauxTVA}}%) : {{formatMoney devis.totalTVA}} €</div>
-      {{/if}}
-      <div class="bold" style="font-size: 15pt; margin-top: 10px;">
-        Total TTC : {{formatMoney devis.totalTTC}} €
-      </div>
+    <div class="total-section">
+      <table class="total-table">
+        <tr>
+          <td class="label">Total HT :</td>
+          <td class="value">{{formatMoney devis.totalHT}} €</td>
+        </tr>
+        {{#if devis.totalTVA}}
+        <tr>
+          <td class="label">TVA ({{devis.tauxTVA}}%) :</td>
+          <td class="value">{{formatMoney devis.totalTVA}} €</td>
+        </tr>
+        {{/if}}
+        <tr class="grand-total">
+          <td class="label">Total TTC :</td>
+          <td class="value">{{formatMoney devis.totalTTC}} €</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="mentions">
+      <strong>Conditions de paiement :</strong> {{devis.conditionsPaiement}}
     </div>
 
     <div class="footer">
-      Conditions de paiement : {{devis.conditionsPaiement}}<br>
       {{#if entreprise.mentionTVALegale}}
         {{entreprise.mentionTVALegale}}
       {{else}}
-        TVA non applicable, art. 293 B du CGI
+        {{#if (eq entreprise.regimeTVA "FRANCHISE_BASE")}}
+          TVA non applicable, art. 293 B du CGI
+        {{/if}}
       {{/if}}
       <br><br>
-      FactureDirect – Vos devis et factures en 30 secondes sur WhatsApp
+      {{#if entreprise.mentionsLegales}}
+        {{entreprise.mentionsLegales}}
+      {{/if}}
+      <br><br>
+      <em>Document généré par FactureDirect</em>
     </div>
   </div>
 </body>
