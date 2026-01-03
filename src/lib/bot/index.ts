@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { sendWhatsAppText } from '@/lib/whatsapp-utils';
 import { normalizePhone } from './utils/phone';
 import * as tools from './tools';
+import { resetConversation } from './conversation';
 
 interface MessageContext {
   from: string;
@@ -96,6 +97,11 @@ export async function handleIncomingMessage(ctx: MessageContext) {
       if (context.messages.length > 10) {
         context.messages = context.messages.slice(-10);
       }
+
+      const lastMessage = context.messages[context.messages.length - 1];
+      if (lastMessage && (lastMessage.content === "annuler" || lastMessage.content === "reset")) {
+        await resetConversation(phone);
+      }
       
       // Appeler le LLM avec le contexte (from = numéro WhatsApp original)
       const { response, newContext } = await handleUserMessage(text, user, context, from);
@@ -108,9 +114,9 @@ export async function handleIncomingMessage(ctx: MessageContext) {
       
       await sendWhatsAppText(from, response);
     } else {
-      // NOUVEL UTILISATEUR → LLM demande le nom
+      // NOUVEL UTILISATEUR → Onboarding complet
       console.log(`[Bot] Nouvel utilisateur, onboarding`);
-      const response = await handleNewUser(text, phone);
+      const response = await handleNewUser(text, phone, from);
       await sendWhatsAppText(from, response);
     }
 
@@ -175,7 +181,7 @@ TES TOOLS DISPONIBLES:
 10. updateEntrepriseSettings - Modifier les paramètres (nécessite: settingName, settingValue)
 
 COMMANDES RAPIDES (intent direct, ready_to_execute: true):
-- "valider" / "ok" / "c'est bon" → intent: validate_facture
+- "valider" / "ok" / "c'est bon" → intent: validate_facture OU validate_devis (selon le contexte)
 - "mes factures" / "voir factures" → intent: list_factures
 - "mes devis" / "voir devis" → intent: list_devis
 - "paramètres" / "mes infos" / "mon entreprise" → intent: settings
@@ -198,7 +204,7 @@ RÈGLES IMPORTANTES:
 
 RÉPONDS EN JSON:
 {
-  "intent": "l'intention (create_facture, create_devis, list_factures, list_devis, validate_facture, settings, update_settings, greeting, help)",
+  "intent": "l'intention (create_facture, create_devis, list_factures, list_devis, validate_facture, validate_devis, settings, update_settings, greeting, help)",
   "entities": {
     "clientName": "nom du client à facturer ou null",
     "companyName": "entreprise du client ou null",
@@ -260,6 +266,18 @@ RÉPONDS EN JSON:
       
       console.log('[LLM] Analyse:', JSON.stringify(parsed, null, 2));
       
+      // Préserver l'intent d'une opération en cours si le LLM retourne un intent générique
+      const genericIntents = ['greeting', 'help', 'unclear', 'out_of_scope'];
+      const hasOperationInProgress = context.intent && !genericIntents.includes(context.intent);
+      const llmReturnedGenericIntent = genericIntents.includes(parsed.intent);
+      
+      // Si opération en cours et LLM retourne intent générique → garder l'intent original
+      const finalIntent = (hasOperationInProgress && llmReturnedGenericIntent) 
+        ? context.intent 
+        : parsed.intent;
+      
+      console.log('[LLM] Intent final:', finalIntent, '(original:', context.intent, ', LLM:', parsed.intent, ')');
+      
       // Fusionner les entités (nouvelles + anciennes)
       const mergedEntities = {
         clientName: parsed.entities?.clientName || context.entities.clientName,
@@ -271,16 +289,16 @@ RÉPONDS EN JSON:
         settingValue: parsed.entities?.settingValue || context.entities.settingValue,
       };
       
-      // Nouveau contexte
+      // Nouveau contexte avec intent préservé
       const newContext: ConversationContext = {
-        intent: parsed.intent,
+        intent: finalIntent,
         entities: mergedEntities,
         pendingTools: parsed.tools || [],
         messages: context.messages,
       };
       
-      // Si greeting/help → réponse simple, reset contexte complet
-      if (['greeting', 'help', 'unclear', 'out_of_scope'].includes(parsed.intent)) {
+      // Si greeting/help ET PAS d'opération en cours → réponse simple, reset contexte
+      if (genericIntents.includes(parsed.intent) && !hasOperationInProgress) {
         return {
           response: parsed.response,
           newContext: { entities: {}, pendingTools: [], messages: [] },
@@ -311,28 +329,13 @@ RÉPONDS EN JSON:
       }
       
       // Construire la réponse (pas encore prêt à exécuter)
-      let response = '';
-      
-      // Résumé des infos collectées
-      if (mergedEntities.clientName || mergedEntities.amount || mergedEntities.description) {
-        response += `📋 *Récapitulatif:*\n`;
-        if (mergedEntities.clientName) response += `• Client: ${mergedEntities.clientName}${mergedEntities.companyName ? ` (${mergedEntities.companyName})` : ''}\n`;
-        if (mergedEntities.description) response += `• Prestation: ${mergedEntities.description}\n`;
-        if (mergedEntities.amount) response += `• Montant: ${mergedEntities.amount}€\n`;
-        if (mergedEntities.quantity) response += `• Quantité: ${mergedEntities.quantity}\n`;
-        response += `\n`;
-      }
-      
-      // Ce qui manque
+      // Afficher les infos manquantes uniquement en console
       if (parsed.missing_info?.length > 0) {
-        response += `⚠️ *Il me manque:*\n`;
-        parsed.missing_info.forEach((info: string) => {
-          response += `• ${info}\n`;
-        });
-        response += `\n`;
+        console.log('[LLM] Il manque:', parsed.missing_info);
       }
       
-      response += `💬 ${parsed.response}`;
+      // Réponse simple et conversationnelle
+      const response = parsed.response;
       
       return { response, newContext };
     }
@@ -665,6 +668,56 @@ async function executeTools(
           `_La facture définitive vous a été envoyée._`;
       }
       
+      case 'validate_devis': {
+        // Chercher le dernier devis BROUILLON de l'utilisateur
+        const devisList = await prisma.devis.findMany({
+          where: { 
+            entrepriseId,
+            statut: 'brouillon',
+          },
+          include: { client: true, lignes: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        });
+        
+        if (devisList.length === 0) {
+          return '❌ Aucun devis en brouillon à valider.\n\nCréez d\'abord un devis.';
+        }
+        
+        const devis = devisList[0];
+        
+        // Mettre à jour le statut du devis
+        const updatedDevis = await prisma.devis.update({
+          where: { id: devis.id },
+          data: { statut: 'envoyé' },
+          include: { client: true, lignes: true },
+        });
+        
+        console.log('[Tools] Devis validé:', updatedDevis.numero);
+        
+        // Générer et envoyer le PDF
+        console.log('[Tools] Génération et envoi du PDF devis...');
+        const pdfResult = await tools.generateAndSendDevisPDF(devis.id, phoneNumber);
+        
+        if (!pdfResult.success) {
+          console.error('[Tools] Erreur PDF devis:', pdfResult.error);
+        }
+        
+        // Calculer les totaux
+        const totalHT = updatedDevis.lignes.reduce((sum, l) => sum + (l.quantite * l.prixUnitaireHT), 0);
+        const totalTTC = updatedDevis.lignes.reduce((sum, l) => {
+          const ht = l.quantite * l.prixUnitaireHT;
+          return sum + ht + (ht * l.tauxTVA / 100);
+        }, 0);
+        
+        return `✅ *Devis validé et envoyé !*\n\n` +
+          `📄 *Numéro:* ${updatedDevis.numero}\n` +
+          `👤 *Client:* ${updatedDevis.client.nom}\n` +
+          `💰 *Total HT:* ${totalHT.toFixed(2)}€\n` +
+          `💰 *Total TTC:* ${totalTTC.toFixed(2)}€\n\n` +
+          `_Le devis vous a été envoyé par WhatsApp._`;
+      }
+      
       default:
         return `⚠️ Action "${intent}" non implémentée pour le moment.`;
     }
@@ -676,26 +729,67 @@ async function executeTools(
 }
 
 /**
- * Gère les nouveaux utilisateurs - demande le nom
+ * Gère les nouveaux utilisateurs - onboarding complet
+ * Collecte: nom utilisateur, nom entreprise
+ * Puis crée le compte et reprend la demande principale
  */
-async function handleNewUser(userMessage: string, phone: string): Promise<string> {
-  // Vérifier si on a déjà un état de conversation
+async function handleNewUser(userMessage: string, phone: string, whatsappFrom: string): Promise<string> {
+  // Récupérer l'état de conversation existant
   const convState = await prisma.conversationState.findUnique({
     where: { telephone: phone },
   });
 
-  const systemPrompt = `Tu es l'assistant de FactureDirect, une application de facturation.
+  const onboardingData = (convState?.data as {
+    step?: string;
+    userName?: string;
+    entrepriseName?: string;
+    originalRequest?: string;
+    messages?: { role: 'user' | 'assistant'; content: string }[];
+  }) || {};
 
-Un nouvel utilisateur vient de te contacter. Tu dois l'accueillir et lui demander son nom pour créer son compte.
+  // Sauvegarder la demande principale au premier message
+  if (!onboardingData.originalRequest && !onboardingData.step) {
+    onboardingData.originalRequest = userMessage;
+    onboardingData.messages = [];
+  }
 
-${convState?.data ? `Données déjà collectées: ${JSON.stringify(convState.data)}` : 'Premier contact avec cet utilisateur.'}
+  // Ajouter le message à l'historique
+  onboardingData.messages = onboardingData.messages || [];
+  onboardingData.messages.push({ role: 'user', content: userMessage });
+  if (onboardingData.messages.length > 10) {
+    onboardingData.messages = onboardingData.messages.slice(-10);
+  }
 
-Si l'utilisateur donne son nom dans son message, extrais-le.
-Sois chaleureux, professionnel et concis.
+  const historyText = onboardingData.messages
+    .slice(-6)
+    .map(m => `${m.role === 'user' ? 'UTILISATEUR' : 'ASSISTANT'}: ${m.content}`)
+    .join('\n');
+
+  const systemPrompt = `Tu es l'assistant de FactureDirect, une application de facturation via WhatsApp.
+
+Tu es en train de créer le compte d'un nouvel utilisateur. C'est OBLIGATOIRE avant de pouvoir l'aider.
+
+ÉTAT ACTUEL DE L'ONBOARDING:
+- Nom de l'utilisateur: ${onboardingData.userName || 'NON COLLECTÉ'}
+- Nom de l'entreprise: ${onboardingData.entrepriseName || 'NON COLLECTÉ'}
+- Demande principale sauvée: "${onboardingData.originalRequest || userMessage}"
+
+HISTORIQUE:
+${historyText || 'Début de conversation'}
+
+RÈGLES:
+1. Si le nom utilisateur manque, demande-le en premier
+2. Si le nom entreprise manque, demande-le ensuite
+3. Quand tu as les DEUX informations (userName ET entrepriseName), indique onboarding_complete: true
+4. Extrais les informations des messages de l'utilisateur
+5. Sois chaleureux, professionnel et concis
+6. Rappelle à l'utilisateur que tu reviendras à sa demande après la création du compte
 
 RÉPONDS EN JSON:
 {
-  "extracted_name": "nom extrait ou null si pas de nom détecté",
+  "extracted_userName": "nom de l'utilisateur extrait ou null",
+  "extracted_entrepriseName": "nom de l'entreprise extrait ou null",
+  "onboarding_complete": true ou false,
   "response": "Ta réponse à l'utilisateur"
 }`;
 
@@ -704,29 +798,97 @@ RÉPONDS EN JSON:
   try {
     const jsonMatch = result.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
+      const cleanJson = jsonMatch[0]
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+        .replace(/\r?\n/g, ' ')
+        .replace(/\s+/g, ' ');
       
-      // Si un nom a été extrait, sauvegarder dans ConversationState
-      if (parsed.extracted_name && parsed.extracted_name !== 'null') {
-        console.log(`[Bot] Nom extrait: ${parsed.extracted_name}`);
-        await prisma.conversationState.upsert({
-          where: { telephone: phone },
-          create: {
-            telephone: phone,
-            step: 'onboarding_name_received',
-            data: { nom: parsed.extracted_name },
-          },
-          update: {
-            step: 'onboarding_name_received',
-            data: { nom: parsed.extracted_name },
+      const parsed = JSON.parse(cleanJson);
+      console.log('[Onboarding] Parsed:', parsed);
+      
+      // Mettre à jour les données d'onboarding
+      if (parsed.extracted_userName && parsed.extracted_userName !== 'null') {
+        onboardingData.userName = parsed.extracted_userName;
+      }
+      if (parsed.extracted_entrepriseName && parsed.extracted_entrepriseName !== 'null') {
+        onboardingData.entrepriseName = parsed.extracted_entrepriseName;
+      }
+      
+      // Ajouter la réponse à l'historique
+      onboardingData.messages.push({ role: 'assistant', content: parsed.response });
+      
+      // Vérifier si onboarding complet
+      const isComplete = parsed.onboarding_complete === true || 
+        (onboardingData.userName && onboardingData.entrepriseName);
+      
+      if (isComplete && onboardingData.userName && onboardingData.entrepriseName) {
+        console.log('[Onboarding] Complet! Création du compte...');
+        
+        // Créer l'entreprise et l'utilisateur
+        const entreprise = await prisma.entreprise.create({
+          data: {
+            nom: onboardingData.entrepriseName,
           },
         });
+        
+        const user = await prisma.utilisateur.create({
+          data: {
+            telephone: phone,
+            nom: onboardingData.userName,
+            role: 'ADMIN',
+            entrepriseId: entreprise.id,
+          },
+          include: { entreprise: true },
+        });
+        
+        console.log(`[Onboarding] Utilisateur créé: ${user.nom} (${entreprise.nom})`);
+        
+        // Réinitialiser le contexte pour la demande principale
+        const newContext: ConversationContext = {
+          entities: {},
+          pendingTools: [],
+          messages: [],
+        };
+        await saveConversationContext(phone, newContext);
+        
+        // Si une demande principale existe, la traiter maintenant
+        if (onboardingData.originalRequest && onboardingData.originalRequest !== userMessage) {
+          const welcomeMsg = `✅ *Bienvenue ${user.nom}!*\n\nVotre compte pour *${entreprise.nom}* a été créé avec succès.\n\nJe m'occupe maintenant de votre demande initiale: "${onboardingData.originalRequest}"\n\n---\n\n`;
+          
+          // Traiter la demande principale
+          const { response: mainResponse, newContext: updatedContext } = await handleUserMessage(
+            onboardingData.originalRequest,
+            user,
+            newContext,
+            whatsappFrom
+          );
+          
+          await saveConversationContext(phone, updatedContext);
+          
+          return welcomeMsg + mainResponse;
+        }
+        
+        return `✅ *Bienvenue ${user.nom}!*\n\nVotre compte pour *${entreprise.nom}* a été créé avec succès.\n\nComment puis-je vous aider aujourd'hui?\n\n📝 Créer une facture\n📄 Créer un devis\n📋 Voir mes clients`;
       }
+      
+      // Onboarding pas encore complet, sauvegarder l'état
+      await prisma.conversationState.upsert({
+        where: { telephone: phone },
+        create: {
+          telephone: phone,
+          step: 'onboarding',
+          data: onboardingData,
+        },
+        update: {
+          step: 'onboarding',
+          data: onboardingData,
+        },
+      });
       
       return parsed.response;
     }
   } catch (e) {
-    console.log('[LLM] Réponse non-JSON pour onboarding');
+    console.error('[Onboarding] Erreur parsing:', e);
   }
   
   return result;
